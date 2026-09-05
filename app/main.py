@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,3 +61,50 @@ async def create_user(
     await db.refresh(new_user)
 
     return new_user
+
+
+@app.get(
+    "/users",
+    response_model=list[UserResponse]
+)
+async def list_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    db: AsyncSession = Depends(get_db)
+):
+    # Fetch users with stable ordering by ID
+    result = await db.execute(
+        select(User)
+        .order_by(User.id)
+        .offset(skip)
+        .limit(limit)
+    )
+
+    users = result.scalars().all()
+
+    return users
+
+
+@app.get(
+    "/users/{user_id}",
+    response_model=UserResponse
+)
+async def get_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    # Find the user by their ID
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+
+    user = result.scalar_one_or_none()
+
+    # Return 404 if the user does not exist
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return user
