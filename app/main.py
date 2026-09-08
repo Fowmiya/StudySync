@@ -2,10 +2,13 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import create_access_token
 from app.db.database import get_db
 from app.db.models import User
+from app.dependencies import get_current_user_id
+from app.schemas.auth import LoginRequest, TokenResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
-from app.security import hash_password
+from app.security import hash_password, verify_password
 
 
 app = FastAPI(
@@ -63,6 +66,40 @@ async def create_user(
     return new_user
 
 
+@app.post(
+    "/auth/login",
+    response_model=TokenResponse
+)
+async def login(
+    login_data: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    # Find the user by email
+    result = await db.execute(
+        select(User).where(User.email == login_data.email)
+    )
+
+    user = result.scalar_one_or_none()
+
+    # Reject invalid credentials
+    if user is None or not verify_password(
+        login_data.password,
+        user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    # Create an access token for the authenticated user
+    access_token = create_access_token(user.id)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
 @app.get(
     "/users",
     response_model=list[UserResponse]
@@ -70,6 +107,7 @@ async def create_user(
 async def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    current_user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     # Fetch users with stable ordering by ID
@@ -91,6 +129,7 @@ async def list_users(
 )
 async def get_user(
     user_id: int,
+    current_user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     # Find the user by their ID
@@ -117,6 +156,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     user_data: UserUpdate,
+    current_user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     # Find the user to update
@@ -175,6 +215,7 @@ async def update_user(
 )
 async def delete_user(
     user_id: int,
+    current_user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     # Find the user to delete
