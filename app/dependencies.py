@@ -24,6 +24,9 @@ def get_current_user_id(
 
         return int(user_id)
 
+    except HTTPException:
+        raise
+
     except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -35,3 +38,16 @@ def get_current_user_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token"
         )
+
+
+def verify_resource_owner(
+    user_id: int,
+    current_user_id: int = Depends(get_current_user_id)
+) -> int:
+    if user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access this user's resource"
+        )
+
+    return current_user_id

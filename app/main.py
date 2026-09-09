@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import create_access_token
 from app.db.database import get_db
 from app.db.models import User
-from app.dependencies import get_current_user_id
+from app.dependencies import get_current_user_id, verify_resource_owner
 from app.schemas.auth import LoginRequest, TokenResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.security import hash_password, verify_password
@@ -35,7 +35,6 @@ async def create_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    # Check whether the email is already registered
     result = await db.execute(
         select(User).where(User.email == user_data.email)
     )
@@ -48,17 +47,14 @@ async def create_user(
             detail="A user with this email already exists"
         )
 
-    # Hash the password before storing it
     password_hash = hash_password(user_data.password)
 
-    # Create the database user
     new_user = User(
         name=user_data.name,
         email=user_data.email,
         password_hash=password_hash
     )
 
-    # Save the user
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
@@ -74,14 +70,12 @@ async def login(
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    # Find the user by email
     result = await db.execute(
         select(User).where(User.email == login_data.email)
     )
 
     user = result.scalar_one_or_none()
 
-    # Reject invalid credentials
     if user is None or not verify_password(
         login_data.password,
         user.password_hash
@@ -91,7 +85,6 @@ async def login(
             detail="Invalid email or password"
         )
 
-    # Create an access token for the authenticated user
     access_token = create_access_token(user.id)
 
     return {
@@ -110,9 +103,9 @@ async def list_users(
     current_user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    # Fetch users with stable ordering by ID
     result = await db.execute(
         select(User)
+        .where(User.id == current_user_id)
         .order_by(User.id)
         .offset(skip)
         .limit(limit)
@@ -129,17 +122,18 @@ async def list_users(
 )
 async def get_user(
     user_id: int,
-    current_user_id: int = Depends(get_current_user_id),
+    current_user_id: int = Depends(verify_resource_owner),
     db: AsyncSession = Depends(get_db)
 ):
-    # Find the user by their ID
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(
+            User.id == user_id,
+            User.id == current_user_id
+        )
     )
 
     user = result.scalar_one_or_none()
 
-    # Return 404 if the user does not exist
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -156,27 +150,26 @@ async def get_user(
 async def update_user(
     user_id: int,
     user_data: UserUpdate,
-    current_user_id: int = Depends(get_current_user_id),
+    current_user_id: int = Depends(verify_resource_owner),
     db: AsyncSession = Depends(get_db)
 ):
-    # Find the user to update
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(
+            User.id == user_id,
+            User.id == current_user_id
+        )
     )
 
     user = result.scalar_one_or_none()
 
-    # Return 404 if the user does not exist
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
 
-    # Get only the fields that were actually provided
     update_data = user_data.model_dump(exclude_unset=True)
 
-    # Check for duplicate email before updating
     if "email" in update_data:
         result = await db.execute(
             select(User).where(
@@ -193,13 +186,11 @@ async def update_user(
                 detail="A user with this email already exists"
             )
 
-    # Hash the password if it is being updated
     if "password" in update_data:
         update_data["password_hash"] = hash_password(
             update_data.pop("password")
         )
 
-    # Apply the provided changes
     for field, value in update_data.items():
         setattr(user, field, value)
 
@@ -215,24 +206,24 @@ async def update_user(
 )
 async def delete_user(
     user_id: int,
-    current_user_id: int = Depends(get_current_user_id),
+    current_user_id: int = Depends(verify_resource_owner),
     db: AsyncSession = Depends(get_db)
 ):
-    # Find the user to delete
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(
+            User.id == user_id,
+            User.id == current_user_id
+        )
     )
 
     user = result.scalar_one_or_none()
 
-    # Return 404 if the user does not exist
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
 
-    # Delete the user
     await db.delete(user)
     await db.commit()
 
