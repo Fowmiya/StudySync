@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.db.database import get_db
-from app.db.models import User
+from app.db.models import User, Subject, Task
 from app.dependencies import get_current_user_id, verify_resource_owner
 from app.schemas.auth import LoginRequest, TokenResponse
+from app.schemas.task import TaskResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.security import hash_password, verify_password
 
@@ -228,3 +229,67 @@ async def delete_user(
     await db.commit()
 
     return None
+
+
+@app.get(
+    "/tasks",
+    response_model=list[TaskResponse]
+)
+async def list_tasks(
+    search: str | None = Query(
+        default=None,
+        min_length=1
+    ),
+    task_status: str | None = Query(
+        default=None,
+        alias="status"
+    ),
+    subject_id: int | None = Query(
+        default=None,
+        ge=1
+    ),
+    skip: int = Query(
+        default=0,
+        ge=0
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=100
+    ),
+    current_user_id: int = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    query = (
+        select(Task)
+        .join(Subject, Task.subject_id == Subject.id)
+        .where(Subject.user_id == current_user_id)
+    )
+
+    if search:
+        query = query.where(
+            Task.title.ilike(f"%{search}%")
+        )
+
+    if task_status:
+        query = query.where(
+            Task.status == task_status
+        )
+
+    if subject_id:
+        query = query.where(
+            Task.subject_id == subject_id
+        )
+
+    query = (
+        query
+        .order_by(Task.id)
+        .offset(skip)
+        .limit(limit)
+    )
+
+    result = await db.execute(query)
+
+    tasks = result.scalars().all()
+
+    return tasks
