@@ -10,6 +10,10 @@ from app.schemas.auth import LoginRequest, TokenResponse
 from app.schemas.task import TaskResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.security import hash_password, verify_password
+from app.services.study_tip_service import (
+    StudyTipServiceError,
+    get_study_tip
+)
 
 
 app = FastAPI(
@@ -293,3 +297,19 @@ async def list_tasks(
     tasks = result.scalars().all()
 
     return tasks
+
+
+@app.get("/study-tip")
+async def study_tip():
+    try:
+        tip = await get_study_tip()
+
+        return {
+            "study_tip": tip
+        }
+
+    except StudyTipServiceError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(error)
+        ) from error
