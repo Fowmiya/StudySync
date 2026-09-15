@@ -51,5 +51,8 @@ async def test_study_tip_service_failure_returns_503(monkeypatch):
 
     assert response.status_code == 503
     assert response.json() == {
-        "detail": "Study tip service timed out"
+        "error": {
+            "status_code": 503,
+            "message": "Study tip service timed out"
+        }
     }

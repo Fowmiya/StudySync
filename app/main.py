@@ -1,4 +1,8 @@
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+import logging
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,11 +20,89 @@ from app.services.study_tip_service import (
 )
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
+
+logger = logging.getLogger("studysync")
+
+
 app = FastAPI(
     title="StudySync API",
     description="AI-Powered Student Study & Performance Platform",
     version="1.0.0"
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(
+    request: Request,
+    exc: HTTPException
+):
+    logger.warning(
+        "client_error | method=%s | path=%s | status_code=%s | detail=%s",
+        request.method,
+        request.url.path,
+        exc.status_code,
+        exc.detail
+    )
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "status_code": exc.status_code,
+                "message": str(exc.detail)
+            }
+        }
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError
+):
+    logger.warning(
+        "validation_error | method=%s | path=%s | status_code=422",
+        request.method,
+        request.url.path
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": {
+                "status_code": 422,
+                "message": "Invalid request data",
+                "details": exc.errors()
+            }
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(
+    request: Request,
+    exc: Exception
+):
+    logger.exception(
+        "unexpected_error | method=%s | path=%s | error_type=%s",
+        request.method,
+        request.url.path,
+        type(exc).__name__
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": {
+                "status_code": 500,
+                "message": "An unexpected server error occurred"
+            }
+        }
+    )
 
 
 @app.get("/health")
