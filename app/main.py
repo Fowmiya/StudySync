@@ -30,8 +30,16 @@ logger = logging.getLogger("studysync")
 
 app = FastAPI(
     title="StudySync API",
-    description="AI-Powered Student Study & Performance Platform",
-    version="1.0.0"
+    description=(
+        "Backend API for the StudySync student study and performance "
+        "management platform. Provides user authentication, user "
+        "management, task search and filtering, study tips, and "
+        "consistent error handling."
+    ),
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
 
