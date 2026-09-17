@@ -114,11 +114,24 @@ async def unexpected_exception_handler(
 
 
 @app.get("/health")
-def health_check():
-    return {
-        "status": "healthy",
-        "message": "StudySync backend is running"
-    }
+async def health_check(
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        await db.execute(select(1))
+
+        return {
+            "status": "healthy",
+            "message": "StudySync backend is running",
+            "database": "connected"
+        }
+
+    except Exception:
+        return {
+            "status": "unhealthy",
+            "message": "StudySync backend is running",
+            "database": "unavailable"
+        }
 
 
 @app.post(
