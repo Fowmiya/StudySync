@@ -103,3 +103,25 @@ If the database is unavailable, the health response reports:
 - [ ] Start the application without --reload.
 - [ ] Verify the API documentation and required endpoints.
 - [ ] Check Git status before deployment.
+---
+
+# Final Demo Sequence
+
+The following sequence can be used to demonstrate the working StudySync backend:
+
+1. Start PostgreSQL and activate the virtual environment.
+2. Start the FastAPI server.
+3. Open `/health` and verify PostgreSQL connectivity.
+4. Open `/docs` to access Swagger UI.
+5. Create a new user using `POST /users`.
+6. Log in using `POST /auth/login` and obtain a JWT access token.
+7. Authorize Swagger using the Bearer token.
+8. Access the authenticated user's protected resource using `GET /users/{user_id}`.
+9. Verify resource ownership by attempting to access another user's resource and confirming the `403 Forbidden` response.
+10. Test `GET /study-tip` and verify the response from the external Study Tip service.
+11. Run the complete automated test suite using `python -m pytest`.
+12. Verify that Git is clean and the latest changes are pushed to GitHub.
+
+### Core Working Flow
+
+Health Check -> User Registration -> Login -> JWT Authentication -> Protected Resource -> Authorization -> Study Tip Service -> Automated Tests
